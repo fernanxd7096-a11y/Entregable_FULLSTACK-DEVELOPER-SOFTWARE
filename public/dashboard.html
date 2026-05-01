@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Nova Salud</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <main class="main-content">
+            <div class="page-header">
+                <div><h2>📊 Dashboard</h2><p>Resumen general de la botica</p></div>
+            </div>
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card blue"><div class="stat-icon">💰</div><div class="stat-value" id="ventasHoyTotal">S/ 0.00</div><div class="stat-label">Ventas de Hoy (<span id="ventasHoyCount">0</span>)</div></div>
+                <div class="stat-card green"><div class="stat-icon">📅</div><div class="stat-value" id="ventasMesTotal">S/ 0.00</div><div class="stat-label">Ventas del Mes (<span id="ventasMesCount">0</span>)</div></div>
+                <div class="stat-card yellow"><div class="stat-icon">📦</div><div class="stat-value" id="totalProductos">0</div><div class="stat-label">Productos Activos</div></div>
+                <div class="stat-card red"><div class="stat-icon">⚠️</div><div class="stat-value" id="stockBajo">0</div><div class="stat-label">Stock Bajo</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+                <div class="card">
+                    <div class="card-header"><h3>📈 Ventas Últimos 7 Días</h3></div>
+                    <div class="card-body"><div class="bar-chart" id="weekChart"></div></div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>🏆 Top Productos del Mes</h3></div>
+                    <div class="card-body" id="topProductos"></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>⚠️ Alertas de Stock Bajo</h3></div>
+                <div class="card-body" id="alertsList"></div>
+            </div>
+        </main>
+    </div>
+    <script src="/js/api.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script>
+        if (!checkAuth()) window.location.href = '/';
+        loadSidebar('dashboard');
+        async function loadDashboard() {
+            try {
+                const stats = await api.getStats();
+                document.getElementById('ventasHoyTotal').textContent = formatCurrency(stats.ventas_hoy.total);
+                document.getElementById('ventasHoyCount').textContent = stats.ventas_hoy.count;
+                document.getElementById('ventasMesTotal').textContent = formatCurrency(stats.ventas_mes.total);
+                document.getElementById('ventasMesCount').textContent = stats.ventas_mes.count;
+                document.getElementById('totalProductos').textContent = stats.total_productos;
+                document.getElementById('stockBajo').textContent = stats.stock_bajo;
+
+                // Weekly chart
+                const chart = document.getElementById('weekChart');
+                if (stats.ventas_semana.length === 0) {
+                    chart.innerHTML = '<div class="empty-state"><p>Sin datos de ventas esta semana</p></div>';
+                } else {
+                    const maxVal = Math.max(...stats.ventas_semana.map(v => parseFloat(v.total))) || 1;
+                    chart.innerHTML = stats.ventas_semana.map(v => {
+                        const h = Math.max((parseFloat(v.total) / maxVal) * 160, 10);
+                        const day = new Date(v.fecha).toLocaleDateString('es-PE', {weekday:'short'});
+                        return `<div class="bar-item"><div class="bar-value">${formatCurrency(v.total)}</div><div class="bar" style="height:${h}px"></div><div class="bar-label">${day}</div></div>`;
+                    }).join('');
+                }
+
+                // Top products
+                const topEl = document.getElementById('topProductos');
+                if (stats.top_productos.length === 0) {
+                    topEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>Sin ventas este mes</p></div>';
+                } else {
+                    topEl.innerHTML = stats.top_productos.map((p, i) =>
+                        `<div class="alert-item"><div class="alert-icon" style="background:rgba(14,165,233,0.15)">${i+1}°</div><div class="alert-info"><div class="alert-name">${p.nombre}</div><div class="alert-detail">${p.total_vendido} vendidos · ${formatCurrency(p.total_ingresos)}</div></div></div>`
+                    ).join('');
+                }
+
+                // Stock alerts
+                const alertas = await api.getAlertas();
+                const alertsEl = document.getElementById('alertsList');
+                if (alertas.length === 0) {
+                    alertsEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>Todo el stock está en niveles adecuados</p></div>';
+                } else {
+                    alertsEl.innerHTML = alertas.map(p =>
+                        `<div class="alert-item"><div class="alert-icon">⚠️</div><div class="alert-info"><div class="alert-name">${p.nombre}</div><div class="alert-detail">Stock: <strong style="color:var(--danger)">${p.stock}</strong> / Mínimo: ${p.stock_minimo}</div></div><a href="/productos" class="btn btn-sm btn-outline">Ver</a></div>`
+                    ).join('');
+                }
+            } catch (e) { showToast('Error cargando dashboard', 'error'); }
+        }
+        loadDashboard();
+    </script>
+</body>
+</html>

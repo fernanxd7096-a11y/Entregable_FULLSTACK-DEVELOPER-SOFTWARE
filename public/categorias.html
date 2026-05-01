@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Categorías - Nova Salud</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <main class="main-content">
+            <div class="page-header">
+                <div><h2>🏷️ Categorías</h2><p>Organización de productos</p></div>
+                <div class="header-actions"><button class="btn btn-primary" onclick="openCatModal()">➕ Nueva Categoría</button></div>
+            </div>
+            <div class="card">
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Nombre</th><th>Descripción</th><th>Productos</th><th>Acciones</th></tr></thead>
+                        <tbody id="catTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="modal-overlay" id="catModal">
+        <div class="modal" style="width:440px">
+            <div class="modal-header"><h3 id="catModalTitle">Nueva Categoría</h3><button class="modal-close" onclick="closeCatModal()">✕</button></div>
+            <div class="modal-body">
+                <input type="hidden" id="catId">
+                <div class="form-group"><label>Nombre *</label><input type="text" class="form-control" id="catNombre" required></div>
+                <div class="form-group"><label>Descripción</label><textarea class="form-control" id="catDesc"></textarea></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeCatModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveCat()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script>
+        if (!checkAuth()) window.location.href = '/';
+        loadSidebar('categorias');
+
+        async function loadCats() {
+            const cats = await api.getCategorias();
+            const tbody = document.getElementById('catTable');
+            if (cats.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">🏷️</div><p>No hay categorías</p></div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = cats.map(c => `<tr>
+                <td><strong>${c.nombre}</strong></td>
+                <td>${c.descripcion || '-'}</td>
+                <td><span class="badge badge-info">${c.total_productos} productos</span></td>
+                <td>
+                    <button class="btn btn-sm btn-outline" onclick="editCat(${c.id}, '${c.nombre.replace(/'/g, "\\'")}', '${(c.descripcion||'').replace(/'/g, "\\'")}')">✏️</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteCat(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')">🗑️</button>
+                </td>
+            </tr>`).join('');
+        }
+
+        function openCatModal() {
+            document.getElementById('catModalTitle').textContent = 'Nueva Categoría';
+            document.getElementById('catId').value = '';
+            document.getElementById('catNombre').value = '';
+            document.getElementById('catDesc').value = '';
+            document.getElementById('catModal').classList.add('active');
+        }
+
+        function editCat(id, nombre, desc) {
+            document.getElementById('catModalTitle').textContent = 'Editar Categoría';
+            document.getElementById('catId').value = id;
+            document.getElementById('catNombre').value = nombre;
+            document.getElementById('catDesc').value = desc;
+            document.getElementById('catModal').classList.add('active');
+        }
+
+        function closeCatModal() { document.getElementById('catModal').classList.remove('active'); }
+
+        async function saveCat() {
+            const id = document.getElementById('catId').value;
+            const data = { nombre: document.getElementById('catNombre').value, descripcion: document.getElementById('catDesc').value };
+            try {
+                if (id) { await api.updateCategoria(id, data); showToast('Categoría actualizada'); }
+                else { await api.createCategoria(data); showToast('Categoría creada'); }
+                closeCatModal();
+                loadCats();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function deleteCat(id, nombre) {
+            if (!confirm(`¿Eliminar categoría "${nombre}"?`)) return;
+            try { await api.deleteCategoria(id); showToast('Categoría eliminada'); loadCats(); }
+            catch (e) { showToast(e.message, 'error'); }
+        }
+
+        loadCats();
+    </script>
+</body>
+</html>

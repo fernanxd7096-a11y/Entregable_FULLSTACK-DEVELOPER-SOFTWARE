@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productos - Nova Salud</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <main class="main-content">
+            <div class="page-header">
+                <div><h2>📦 Productos</h2><p>Gestión de inventario</p></div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="openModal()">➕ Nuevo Producto</button>
+                </div>
+            </div>
+            <div class="filter-bar">
+                <div class="search-box"><input type="text" class="form-control" id="searchInput" placeholder="Buscar producto..." oninput="loadProducts()"></div>
+                <select class="form-control filter-select" id="catFilter" onchange="loadProducts()"><option value="">Todas las categorías</option></select>
+                <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">
+                    <input type="checkbox" id="stockBajoFilter" onchange="loadProducts()"> Solo stock bajo
+                </label>
+            </div>
+            <div class="card">
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Producto</th><th>Categoría</th><th>P. Compra</th><th>P. Venta</th><th>Stock</th><th>Vencimiento</th><th>Acciones</th></tr></thead>
+                        <tbody id="productTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Producto -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal">
+            <div class="modal-header"><h3 id="modalTitle">Nuevo Producto</h3><button class="modal-close" onclick="closeModal()">✕</button></div>
+            <div class="modal-body">
+                <form id="productForm">
+                    <input type="hidden" id="productId">
+                    <div class="form-group"><label>Nombre *</label><input type="text" class="form-control" id="pNombre" required></div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Categoría</label><select class="form-control" id="pCategoria"><option value="">Sin categoría</option></select></div>
+                        <div class="form-group"><label>Unidad</label><input type="text" class="form-control" id="pUnidad" value="unidad"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Precio Compra</label><input type="number" step="0.01" class="form-control" id="pPrecioCompra" value="0"></div>
+                        <div class="form-group"><label>Precio Venta *</label><input type="number" step="0.01" class="form-control" id="pPrecioVenta" required></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Stock</label><input type="number" class="form-control" id="pStock" value="0"></div>
+                        <div class="form-group"><label>Stock Mínimo</label><input type="number" class="form-control" id="pStockMin" value="10"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label>Fecha Vencimiento</label><input type="date" class="form-control" id="pVencimiento"></div>
+                    </div>
+                    <div class="form-group"><label>Descripción</label><textarea class="form-control" id="pDescripcion"></textarea></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveProduct()">Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script>
+        if (!checkAuth()) window.location.href = '/';
+        loadSidebar('productos');
+
+        async function loadCategorias() {
+            const cats = await api.getCategorias();
+            const opts = cats.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('');
+            document.getElementById('catFilter').innerHTML = '<option value="">Todas las categorías</option>' + opts;
+            document.getElementById('pCategoria').innerHTML = '<option value="">Sin categoría</option>' + opts;
+        }
+
+        async function loadProducts() {
+            const search = document.getElementById('searchInput').value;
+            const cat = document.getElementById('catFilter').value;
+            const stockBajo = document.getElementById('stockBajoFilter').checked;
+            let params = [];
+            if (search) params.push('search=' + encodeURIComponent(search));
+            if (cat) params.push('categoria=' + cat);
+            if (stockBajo) params.push('stock_bajo=true');
+            const productos = await api.getProductos(params.join('&'));
+            const tbody = document.getElementById('productTable');
+            if (productos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📦</div><p>No se encontraron productos</p></div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = productos.map(p => {
+                const stockClass = p.stock <= 0 ? 'badge-danger' : p.stock <= p.stock_minimo ? 'badge-warning' : 'badge-success';
+                const venc = p.fecha_vencimiento ? formatDate(p.fecha_vencimiento) : '-';
+                return `<tr>
+                    <td><strong>${p.nombre}</strong><br><small style="color:var(--text-muted)">${p.descripcion || ''}</small></td>
+                    <td><span class="badge badge-info">${p.categoria_nombre || 'Sin categoría'}</span></td>
+                    <td>${formatCurrency(p.precio_compra)}</td>
+                    <td><strong>${formatCurrency(p.precio_venta)}</strong></td>
+                    <td><span class="badge ${stockClass}">${p.stock} ${p.unidad}</span></td>
+                    <td>${venc}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline" onclick="editProduct(${p.id})">✏️</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteProduct(${p.id}, '${p.nombre}')">🗑️</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function openModal(product = null) {
+            document.getElementById('modalTitle').textContent = product ? 'Editar Producto' : 'Nuevo Producto';
+            document.getElementById('productId').value = product ? product.id : '';
+            document.getElementById('pNombre').value = product ? product.nombre : '';
+            document.getElementById('pCategoria').value = product ? (product.categoria_id || '') : '';
+            document.getElementById('pUnidad').value = product ? product.unidad : 'unidad';
+            document.getElementById('pPrecioCompra').value = product ? product.precio_compra : 0;
+            document.getElementById('pPrecioVenta').value = product ? product.precio_venta : '';
+            document.getElementById('pStock').value = product ? product.stock : 0;
+            document.getElementById('pStockMin').value = product ? product.stock_minimo : 10;
+            document.getElementById('pVencimiento').value = product && product.fecha_vencimiento ? product.fecha_vencimiento.split('T')[0] : '';
+            document.getElementById('pDescripcion').value = product ? (product.descripcion || '') : '';
+            document.getElementById('productModal').classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('productModal').classList.remove('active'); }
+
+        async function editProduct(id) {
+            const product = await api.getProducto(id);
+            openModal(product);
+        }
+
+        async function saveProduct() {
+            const id = document.getElementById('productId').value;
+            const data = {
+                nombre: document.getElementById('pNombre').value,
+                descripcion: document.getElementById('pDescripcion').value,
+                categoria_id: document.getElementById('pCategoria').value || null,
+                precio_compra: parseFloat(document.getElementById('pPrecioCompra').value) || 0,
+                precio_venta: parseFloat(document.getElementById('pPrecioVenta').value),
+                stock: parseInt(document.getElementById('pStock').value) || 0,
+                stock_minimo: parseInt(document.getElementById('pStockMin').value) || 10,
+                unidad: document.getElementById('pUnidad').value || 'unidad',
+                fecha_vencimiento: document.getElementById('pVencimiento').value || null
+            };
+            try {
+                if (id) { await api.updateProducto(id, data); showToast('Producto actualizado'); }
+                else { await api.createProducto(data); showToast('Producto creado'); }
+                closeModal();
+                loadProducts();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function deleteProduct(id, nombre) {
+            if (!confirm(`¿Eliminar "${nombre}"?`)) return;
+            try { await api.deleteProducto(id); showToast('Producto eliminado'); loadProducts(); }
+            catch (e) { showToast(e.message, 'error'); }
+        }
+
+        loadCategorias();
+        loadProducts();
+    </script>
+</body>
+</html>
