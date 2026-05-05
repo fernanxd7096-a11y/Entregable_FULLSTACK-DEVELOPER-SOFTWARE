@@ -40,8 +40,11 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="cart-items" id="cartItems">
-                            <div class="empty-state" style="padding:32px"><div class="empty-icon">🛒</div><p>Agrega productos al carrito</p></div>
+                        <div class="cart-items" id="cartItems" style="max-height: 350px; overflow-y: auto;">
+                            <div class="empty-state" style="padding:32px">
+                                <div class="empty-icon">🛒</div>
+                                <p>Agrega productos al carrito</p>
+                            </div>
                         </div>
                     </div>
                     <div class="cart-summary">
@@ -83,11 +86,22 @@
             const grid = document.getElementById('posGrid');
             if (products.length === 0) { grid.innerHTML = '<div class="empty-state"><p>No se encontraron productos</p></div>'; return; }
             grid.innerHTML = products.map(p => {
-                const cls = p.stock <= 0 ? 'no-stock' : p.stock <= p.stock_minimo ? 'low-stock' : '';
+                let cls = p.stock <= 0 ? 'no-stock' : p.stock <= p.stock_minimo ? 'low-stock' : '';
+                let vencidoLabel = '';
+                if (p.fecha_vencimiento) {
+                    const fechaVenc = new Date(p.fecha_vencimiento);
+                    const hoy = new Date();
+                    hoy.setHours(0, 0, 0, 0);
+                    if (fechaVenc < hoy) {
+                        cls = 'expired-product';
+                        vencidoLabel = '<div class="p-expired">⚠️ VENCIDO</div>';
+                    }
+                }
                 return `<div class="product-card ${cls}" onclick="addToCart(${p.id})">
                     <div class="p-name">${p.nombre}</div>
                     <div class="p-price">${formatCurrency(p.precio_venta)}</div>
                     <div class="p-stock">Stock: ${p.stock}</div>
+                    ${vencidoLabel}
                 </div>`;
             }).join('');
         }
@@ -95,6 +109,16 @@
         function addToCart(productId) {
             const product = allProducts.find(p => p.id === productId);
             if (!product || product.stock <= 0) return;
+            // Verificar si está vencido
+            if (product.fecha_vencimiento) {
+                const fechaVenc = new Date(product.fecha_vencimiento);
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                if (fechaVenc < hoy) {
+                    showToast(`"${product.nombre}" está VENCIDO. No se puede vender.`, 'error');
+                    return;
+                }
+            }
             const existing = cart.find(i => i.producto_id === productId);
             if (existing) {
                 if (existing.cantidad >= product.stock) { showToast('Stock insuficiente', 'error'); return; }

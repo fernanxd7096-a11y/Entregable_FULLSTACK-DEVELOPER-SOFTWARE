@@ -46,9 +46,19 @@ router.post('/', authMiddleware, async (req, res) => {
         if (!items || items.length === 0) return res.status(400).json({ error: 'La venta debe tener al menos un producto' });
 
         for (const item of items) {
-            const [producto] = await connection.query('SELECT id, nombre, stock FROM productos WHERE id = ? AND activo = 1', [item.producto_id]);
+            const [producto] = await connection.query('SELECT id, nombre, stock, fecha_vencimiento FROM productos WHERE id = ? AND activo = 1', [item.producto_id]);
             if (producto.length === 0) { await connection.rollback(); return res.status(400).json({ error: `Producto ID ${item.producto_id} no encontrado` }); }
             if (producto[0].stock < item.cantidad) { await connection.rollback(); return res.status(400).json({ error: `Stock insuficiente para "${producto[0].nombre}". Disponible: ${producto[0].stock}` }); }
+            // Validar que el producto no esté vencido
+            if (producto[0].fecha_vencimiento) {
+                const fechaVenc = new Date(producto[0].fecha_vencimiento);
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                if (fechaVenc < hoy) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: `No se puede vender "${producto[0].nombre}" porque está VENCIDO (${fechaVenc.toLocaleDateString('es-PE')})` });
+                }
+            }
         }
 
         let subtotal = 0;

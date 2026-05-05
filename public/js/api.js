@@ -25,7 +25,8 @@ async function apiRequest(endpoint, options = {}) {
     try {
         const response = await fetch(`${API_BASE}${endpoint}`, config);
         const data = await response.json();
-        if (response.status === 401) { logout(); return null; }
+        // Solo hacer logout automático si el 401 NO es del login
+        if (response.status === 401 && endpoint !== '/auth/login') { logout(); return null; }
         if (!response.ok) throw new Error(data.error || 'Error en la solicitud');
         return data;
     } catch (error) {
@@ -43,6 +44,7 @@ const api = {
     updateProducto: (id, data) => apiRequest(`/productos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     deleteProducto: (id) => apiRequest(`/productos/${id}`, { method: 'DELETE' }),
     getAlertas: () => apiRequest('/productos/alertas'),
+    getAlertasVencidos: () => apiRequest('/productos/alertas-vencidos'),
     // Categorías
     getCategorias: () => apiRequest('/categorias'),
     createCategoria: (data) => apiRequest('/categorias', { method: 'POST', body: JSON.stringify(data) }),
@@ -53,8 +55,19 @@ const api = {
     getVenta: (id) => apiRequest(`/ventas/${id}`),
     createVenta: (data) => apiRequest('/ventas', { method: 'POST', body: JSON.stringify(data) }),
     // Dashboard
-    getStats: () => apiRequest('/dashboard/stats')
+    getStats: () => apiRequest('/dashboard/stats'),
+    // Usuarios
+    getUsuarios: () => apiRequest('/usuarios'),
+    createUsuario: (data) => apiRequest('/usuarios', { method: 'POST', body: JSON.stringify(data) }),
+    updateUsuario: (id, data) => apiRequest(`/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteUsuario: (id) => apiRequest(`/usuarios/${id}`, { method: 'DELETE' }),
+    reactivarUsuario: (id) => apiRequest(`/usuarios/${id}/reactivar`, { method: 'PUT' })
 };
+
+function isSuperAdmin() {
+    const user = getUser();
+    return user && user.es_super_admin === true;
+}
 
 // Toast notifications
 function showToast(message, type = 'success') {

@@ -19,6 +19,7 @@
                 <div class="stat-card green"><div class="stat-icon">📅</div><div class="stat-value" id="ventasMesTotal">S/ 0.00</div><div class="stat-label">Ventas del Mes (<span id="ventasMesCount">0</span>)</div></div>
                 <div class="stat-card yellow"><div class="stat-icon">📦</div><div class="stat-value" id="totalProductos">0</div><div class="stat-label">Productos Activos</div></div>
                 <div class="stat-card red"><div class="stat-icon">⚠️</div><div class="stat-value" id="stockBajo">0</div><div class="stat-label">Stock Bajo</div></div>
+                <div class="stat-card orange"><div class="stat-icon">☠️</div><div class="stat-value" id="productosVencidos">0</div><div class="stat-label">Productos Vencidos</div></div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
                 <div class="card">
@@ -30,9 +31,15 @@
                     <div class="card-body" id="topProductos"></div>
                 </div>
             </div>
-            <div class="card">
-                <div class="card-header"><h3>⚠️ Alertas de Stock Bajo</h3></div>
-                <div class="card-body" id="alertsList"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px">
+                <div class="card">
+                    <div class="card-header"><h3>⚠️ Alertas de Stock Bajo</h3></div>
+                    <div class="card-body" id="alertsList"></div>
+                </div>
+                <div class="card">
+                    <div class="card-header" style="border-bottom-color: rgba(239,68,68,0.3)"><h3>☠️ Productos Vencidos</h3></div>
+                    <div class="card-body" id="vencidosList"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -50,6 +57,7 @@
                 document.getElementById('ventasMesCount').textContent = stats.ventas_mes.count;
                 document.getElementById('totalProductos').textContent = stats.total_productos;
                 document.getElementById('stockBajo').textContent = stats.stock_bajo;
+                document.getElementById('productosVencidos').textContent = stats.productos_vencidos;
 
                 // Weekly chart
                 const chart = document.getElementById('weekChart');
@@ -82,6 +90,17 @@
                 } else {
                     alertsEl.innerHTML = alertas.map(p =>
                         `<div class="alert-item"><div class="alert-icon">⚠️</div><div class="alert-info"><div class="alert-name">${p.nombre}</div><div class="alert-detail">Stock: <strong style="color:var(--danger)">${p.stock}</strong> / Mínimo: ${p.stock_minimo}</div></div><a href="/productos" class="btn btn-sm btn-outline">Ver</a></div>`
+                    ).join('');
+                }
+
+                // Expired products alerts
+                const vencidos = await api.getAlertasVencidos();
+                const vencidosEl = document.getElementById('vencidosList');
+                if (vencidos.length === 0) {
+                    vencidosEl.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>No hay productos vencidos</p></div>';
+                } else {
+                    vencidosEl.innerHTML = vencidos.map(p =>
+                        `<div class="alert-item"><div class="alert-icon" style="background:rgba(239,68,68,0.15);color:var(--danger)">☠️</div><div class="alert-info"><div class="alert-name" style="color:var(--danger)">${p.nombre}</div><div class="alert-detail">Venció: <strong style="color:var(--danger)">${formatDate(p.fecha_vencimiento)}</strong> · Hace ${p.dias_vencido} día(s)</div></div><a href="/productos" class="btn btn-sm btn-danger">Ver</a></div>`
                     ).join('');
                 }
             } catch (e) { showToast('Error cargando dashboard', 'error'); }

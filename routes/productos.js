@@ -68,6 +68,26 @@ router.get('/alertas', authMiddleware, async (req, res) => {
     }
 });
 
+// GET /api/productos/alertas-vencidos - Productos vencidos
+router.get('/alertas-vencidos', authMiddleware, async (req, res) => {
+    try {
+        const pool = req.app.locals.pool;
+        const [productos] = await pool.query(`
+            SELECT p.*, c.nombre as categoria_nombre,
+                   DATEDIFF(CURDATE(), p.fecha_vencimiento) as dias_vencido
+            FROM productos p 
+            LEFT JOIN categorias c ON p.categoria_id = c.id 
+            WHERE p.fecha_vencimiento IS NOT NULL 
+              AND p.fecha_vencimiento < CURDATE() 
+              AND p.activo = 1
+            ORDER BY p.fecha_vencimiento ASC
+        `);
+        res.json(productos);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener alertas de vencimiento' });
+    }
+});
+
 // GET /api/productos/:id - Obtener un producto
 router.get('/:id', authMiddleware, async (req, res) => {
     try {
@@ -90,13 +110,34 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // POST /api/productos - Crear producto
+// POST /api/productos - Crear producto
 router.post('/', authMiddleware, async (req, res) => {
     try {
         const pool = req.app.locals.pool;
-        const { nombre, descripcion, categoria_id, precio_compra, precio_venta, stock, stock_minimo, unidad, fecha_vencimiento } = req.body;
+        const { 
+            nombre, descripcion, categoria_id, precio_compra, 
+            precio_venta, stock, stock_minimo, unidad, fecha_vencimiento 
+        } = req.body;
 
+        // 1. Validaciones básicas existentes
         if (!nombre || !precio_venta) {
             return res.status(400).json({ error: 'Nombre y precio de venta son requeridos' });
+        }
+
+        // 2. Validación de Fecha de Vencimiento
+        if (fecha_vencimiento) {
+            const fechaVenc = new Date(fecha_vencimiento);
+            const hoy = new Date();
+            
+            // Ponemos las horas a 0 para comparar solo las fechas (día/mes/año)
+            hoy.setHours(0, 0, 0, 0);
+
+            if (fechaVenc < hoy) {
+                return res.status(400).json({ 
+                    error: 'No se puede registrar un producto con fecha de vencimiento pasada.',
+                    vencido: true 
+                });
+            }
         }
 
         const [result] = await pool.query(
@@ -105,7 +146,11 @@ router.post('/', authMiddleware, async (req, res) => {
             [nombre, descripcion || null, categoria_id || null, precio_compra || 0, precio_venta, stock || 0, stock_minimo || 10, unidad || 'unidad', fecha_vencimiento || null]
         );
 
-        res.status(201).json({ message: 'Producto creado exitosamente', id: result.insertId });
+        res.status(201).json({ 
+            message: 'Producto creado exitosamente', 
+            id: result.insertId 
+        });
+
     } catch (error) {
         console.error('Error al crear producto:', error);
         res.status(500).json({ error: 'Error al crear producto' });

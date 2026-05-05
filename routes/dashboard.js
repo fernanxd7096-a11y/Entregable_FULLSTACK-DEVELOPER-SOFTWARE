@@ -22,6 +22,9 @@ router.get('/stats', authMiddleware, async (req, res) => {
         // Productos con stock bajo
         const [stockBajo] = await pool.query('SELECT COUNT(*) as count FROM productos WHERE stock <= stock_minimo AND activo = 1');
 
+        // Productos vencidos
+        const [productosVencidos] = await pool.query('SELECT COUNT(*) as count FROM productos WHERE fecha_vencimiento IS NOT NULL AND fecha_vencimiento < CURDATE() AND activo = 1');
+
         // Top 5 productos más vendidos
         const [topProductos] = await pool.query(`
             SELECT p.nombre, SUM(dv.cantidad) as total_vendido, SUM(dv.subtotal) as total_ingresos
@@ -51,6 +54,7 @@ router.get('/stats', authMiddleware, async (req, res) => {
             ventas_mes: ventasMes[0],
             total_productos: totalProductos[0].count,
             stock_bajo: stockBajo[0].count,
+            productos_vencidos: productosVencidos[0].count,
             top_productos: topProductos,
             ventas_semana: ventasSemana,
             por_categoria: porCategoria

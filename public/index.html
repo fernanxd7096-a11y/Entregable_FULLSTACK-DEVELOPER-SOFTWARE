@@ -27,6 +27,11 @@
                 <button type="submit" class="btn btn-primary btn-block" id="loginBtn">
                     Iniciar Sesión
                 </button>
+                <!-- Mensaje de error visible debajo del botón -->
+                <div id="loginError" class="login-error-msg" style="display:none;">
+                    <span class="error-icon">⚠️</span>
+                    <span id="loginErrorText"></span>
+                </div>
             </form>
             <p style="text-align:center;margin-top:20px;font-size:12px;color:var(--text-muted)">
                 Credenciales: admin@novasalud.com / admin123
@@ -36,8 +41,26 @@
     <script src="/js/api.js"></script>
     <script>
         if (isAuthenticated()) window.location.href = '/dashboard';
+
+        const loginError = document.getElementById('loginError');
+        const loginErrorText = document.getElementById('loginErrorText');
+
+        function showLoginError(msg) {
+            loginErrorText.textContent = msg;
+            loginError.style.display = 'flex';
+            loginError.classList.remove('shake');
+            // Forzar reflow para reiniciar la animación
+            void loginError.offsetWidth;
+            loginError.classList.add('shake');
+        }
+
+        function hideLoginError() {
+            loginError.style.display = 'none';
+        }
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            hideLoginError();
             const btn = document.getElementById('loginBtn');
             btn.textContent = 'Ingresando...';
             btn.disabled = true;
@@ -49,11 +72,15 @@
                 setAuth(data.token, data.user);
                 window.location.href = '/dashboard';
             } catch (error) {
-                showToast(error.message, 'error');
+                showLoginError(error.message);
                 btn.textContent = 'Iniciar Sesión';
                 btn.disabled = false;
             }
         });
+
+        // Ocultar error al empezar a escribir
+        document.getElementById('email').addEventListener('input', hideLoginError);
+        document.getElementById('password').addEventListener('input', hideLoginError);
     </script>
 </body>
 </html>

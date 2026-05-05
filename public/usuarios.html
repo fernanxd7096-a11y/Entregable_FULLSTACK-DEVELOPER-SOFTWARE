@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Nova Salud - Gestión de Usuarios del sistema">
+    <title>Usuarios - Nova Salud</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <div class="app-layout">
+        <aside class="sidebar" id="sidebar"></aside>
+        <main class="main-content">
+            <div class="page-header">
+                <div><h2>👥 Gestión de Usuarios</h2><p>Administra los usuarios del sistema</p></div>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="openModal()" id="btnNuevoUsuario">➕ Nuevo Usuario</button>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid" id="userStats">
+                <div class="stat-card blue"><div class="stat-icon">👥</div><div class="stat-value" id="totalUsers">0</div><div class="stat-label">Total Usuarios</div></div>
+                <div class="stat-card green"><div class="stat-icon">🛡️</div><div class="stat-value" id="totalAdmins">0</div><div class="stat-label">Administradores</div></div>
+                <div class="stat-card yellow"><div class="stat-icon">👷</div><div class="stat-value" id="totalEmpleados">0</div><div class="stat-label">Empleados</div></div>
+                <div class="stat-card red"><div class="stat-icon">🚫</div><div class="stat-value" id="totalInactivos">0</div><div class="stat-label">Inactivos</div></div>
+            </div>
+
+            <!-- Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h3>Lista de Usuarios</h3>
+                    <div class="filter-bar" style="margin:0;gap:8px">
+                        <select class="form-control filter-select" id="filterRol" onchange="renderTable()" style="min-width:140px">
+                            <option value="">Todos los roles</option>
+                            <option value="admin">Admin</option>
+                            <option value="empleado">Empleado</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
+                        <tbody id="usersTableBody"><tr><td colspan="6"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Crear/Editar -->
+    <div class="modal-overlay" id="userModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Nuevo Usuario</h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm">
+                    <input type="hidden" id="userId">
+                    <div class="form-group">
+                        <label for="userName">Nombre completo</label>
+                        <input type="text" id="userName" class="form-control" placeholder="Nombre del usuario" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="userEmail">Correo electrónico</label>
+                        <input type="email" id="userEmail" class="form-control" placeholder="correo@ejemplo.com" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="userPassword">Contraseña <span id="pwdHint" style="font-weight:400;text-transform:none;font-size:11px;color:var(--text-muted)"></span></label>
+                            <input type="password" id="userPassword" class="form-control" placeholder="Mínimo 6 caracteres">
+                        </div>
+                        <div class="form-group">
+                            <label for="userRol">Rol</label>
+                            <select id="userRol" class="form-control" required>
+                                <option value="empleado">👷 Empleado</option>
+                                <option value="admin">🛡️ Administrador</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="rolDescription" class="rol-description"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal()">Cancelar</button>
+                <button class="btn btn-primary" onclick="saveUser()" id="btnSave">💾 Guardar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script>
+        if (!checkAuth()) window.location.href = '/';
+        if (!isSuperAdmin()) { showToast('Acceso denegado. Solo el administrador superior.', 'error'); window.location.href = '/dashboard'; }
+        loadSidebar('usuarios');
+
+        let allUsers = [];
+
+        // Descripciones de rol
+        const rolDescriptions = {
+            empleado: '👷 <strong>Empleado:</strong> Puede realizar ventas, ver productos e historial. No puede gestionar usuarios ni configuraciones.',
+            admin: '🛡️ <strong>Administrador:</strong> Acceso completo a productos, categorías, ventas e historial. No puede gestionar otros usuarios.'
+        };
+
+        document.getElementById('userRol').addEventListener('change', (e) => {
+            document.getElementById('rolDescription').innerHTML = rolDescriptions[e.target.value] || '';
+        });
+
+        async function loadUsers() {
+            try {
+                allUsers = await api.getUsuarios();
+                updateStats();
+                renderTable();
+            } catch (e) { showToast('Error cargando usuarios', 'error'); }
+        }
+
+        function updateStats() {
+            const activos = allUsers.filter(u => u.activo);
+            document.getElementById('totalUsers').textContent = activos.length;
+            document.getElementById('totalAdmins').textContent = activos.filter(u => u.rol === 'admin').length;
+            document.getElementById('totalEmpleados').textContent = activos.filter(u => u.rol === 'empleado').length;
+            document.getElementById('totalInactivos').textContent = allUsers.filter(u => !u.activo).length;
+        }
+
+        function renderTable() {
+            const filterRol = document.getElementById('filterRol').value;
+            let filtered = allUsers;
+            if (filterRol) filtered = filtered.filter(u => u.rol === filterRol);
+
+            const tbody = document.getElementById('usersTableBody');
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">👥</div><p>No se encontraron usuarios</p></div></td></tr>';
+                return;
+            }
+            tbody.innerHTML = filtered.map(u => {
+                const isSA = u.es_super_admin;
+                const rolBadge = u.rol === 'admin'
+                    ? `<span class="badge badge-info">${isSA ? '⭐ Super Admin' : '🛡️ Admin'}</span>`
+                    : '<span class="badge badge-warning">👷 Empleado</span>';
+                const estadoBadge = u.activo
+                    ? '<span class="badge badge-success">Activo</span>'
+                    : '<span class="badge badge-danger">Inactivo</span>';
+                const actions = isSA
+                    ? '<span style="color:var(--text-muted);font-size:12px">Protegido</span>'
+                    : `<button class="btn btn-sm btn-outline" onclick="editUser(${u.id})" title="Editar">✏️</button>
+                       ${u.activo
+                           ? `<button class="btn btn-sm btn-danger" onclick="toggleUser(${u.id}, false)" title="Desactivar">🚫</button>`
+                           : `<button class="btn btn-sm btn-success" onclick="toggleUser(${u.id}, true)" title="Reactivar">✅</button>`}`;
+                return `<tr style="${!u.activo ? 'opacity:0.5' : ''}">
+                    <td><div style="display:flex;align-items:center;gap:10px"><div class="user-avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${u.nombre.charAt(0).toUpperCase()}</div><strong>${u.nombre}</strong></div></td>
+                    <td>${u.email}</td><td>${rolBadge}</td><td>${estadoBadge}</td>
+                    <td>${formatDate(u.created_at)}</td><td style="display:flex;gap:6px">${actions}</td></tr>`;
+            }).join('');
+        }
+
+        function openModal(user = null) {
+            document.getElementById('userModal').classList.add('active');
+            document.getElementById('userForm').reset();
+            document.getElementById('rolDescription').innerHTML = rolDescriptions['empleado'];
+            if (user) {
+                document.getElementById('modalTitle').textContent = '✏️ Editar Usuario';
+                document.getElementById('userId').value = user.id;
+                document.getElementById('userName').value = user.nombre;
+                document.getElementById('userEmail').value = user.email;
+                document.getElementById('userRol').value = user.rol;
+                document.getElementById('userPassword').removeAttribute('required');
+                document.getElementById('pwdHint').textContent = '(dejar vacío para no cambiar)';
+                document.getElementById('rolDescription').innerHTML = rolDescriptions[user.rol] || '';
+                document.getElementById('btnSave').textContent = '💾 Actualizar';
+            } else {
+                document.getElementById('modalTitle').textContent = '➕ Nuevo Usuario';
+                document.getElementById('userId').value = '';
+                document.getElementById('userPassword').setAttribute('required', 'required');
+                document.getElementById('pwdHint').textContent = '';
+                document.getElementById('btnSave').textContent = '💾 Guardar';
+            }
+        }
+
+        function closeModal() { document.getElementById('userModal').classList.remove('active'); }
+
+        async function saveUser() {
+            const id = document.getElementById('userId').value;
+            const data = {
+                nombre: document.getElementById('userName').value.trim(),
+                email: document.getElementById('userEmail').value.trim(),
+                rol: document.getElementById('userRol').value
+            };
+            const pwd = document.getElementById('userPassword').value;
+            if (pwd) data.password = pwd;
+
+            if (!data.nombre || !data.email) { showToast('Complete todos los campos', 'error'); return; }
+            if (!id && !pwd) { showToast('La contraseña es requerida', 'error'); return; }
+            if (pwd && pwd.length < 6) { showToast('La contraseña debe tener al menos 6 caracteres', 'error'); return; }
+
+            const btn = document.getElementById('btnSave');
+            btn.disabled = true; btn.textContent = '⏳ Guardando...';
+            try {
+                if (id) { await api.updateUsuario(id, data); showToast('Usuario actualizado'); }
+                else { await api.createUsuario(data); showToast('Usuario creado exitosamente'); }
+                closeModal();
+                await loadUsers();
+            } catch (e) { showToast(e.message, 'error'); }
+            btn.disabled = false; btn.textContent = id ? '💾 Actualizar' : '💾 Guardar';
+        }
+
+        function editUser(id) {
+            const user = allUsers.find(u => u.id === id);
+            if (user) openModal(user);
+        }
+
+        async function toggleUser(id, activate) {
+            const action = activate ? 'reactivar' : 'desactivar';
+            if (!confirm(`¿Seguro que deseas ${action} este usuario?`)) return;
+            try {
+                if (activate) await api.reactivarUsuario(id);
+                else await api.deleteUsuario(id);
+                showToast(`Usuario ${activate ? 'reactivado' : 'desactivado'}`);
+                await loadUsers();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        loadUsers();
+    </script>
+    <style>
+        .rol-description { padding: 12px 16px; background: rgba(14,165,233,0.08); border: 1px solid rgba(14,165,233,0.2); border-radius: var(--radius-sm); font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-top: 4px; }
+    </style>
+</body>
+</html>
