@@ -3,7 +3,7 @@ require('dotenv').config();
 const mysql = require('mysql2/promise');
 
 async function setup() {
-    const port = process.env.DB_PORT || 3307;
+    const port = process.env.DB_PORT || 3306;
     console.log(`Conectando a MySQL en puerto ${port}...`);
 
     // Primero conectar sin base de datos para crearla
